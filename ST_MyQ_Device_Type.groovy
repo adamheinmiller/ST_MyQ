@@ -39,11 +39,8 @@ Setup your Garage Door:
 If everything worked correctly, the door should retrieve the current status.  If you see "Unknown" there is probably an issue with your username and password; use the logs to capture error information.  If you see "Door not Found" your garage door name is not correct.
 
 */ 
- 
+
    
-import groovy.time.TimeCategory 
-
-
 preferences 
 {
     input("username", "text", title: "Username", description: "MyQ username (email address)")
@@ -296,16 +293,13 @@ def login()
 
     callApiGet("api/user/validatewithculture", [], loginQParams) { response ->
     	
-        use(TimeCategory) {
+        state.Login = [
 
-            state.Login = [
-
-                BrandID: response.data.BrandName,
-                UserID: response.data.UserId,
-                SecToken: response.data.SecurityToken,
-                Expiration: (new Date()).getTime() + 3600000
-            ]
-		}
+            BrandID: response.data.BrandName,
+            UserID: response.data.UserId,
+            SecToken: response.data.SecurityToken,
+            Expiration: (new Date()).getTime() + 3600000
+        ]
         
 		log.debug "Sec Token: $state.Login.SecToken"
     }
@@ -430,14 +424,15 @@ def sleepForDuration(duration, callback = {})
 	// I'm sorry!
 
 	def dTotalSleep = 0
+	def dStart = new Date().getTime()
     
     while (dTotalSleep <= duration)
-    {    
-    	def dStart = new Date().getTime()
-        
+    {            
 		try { httpGet("http://australia.gov.au/404") { } } catch (e) { }
         
-        dTotalSleep += (new Date().getTime() - dStart)
+        dTotalSleep = (new Date().getTime() - dStart)
+        
+        //log.debug "Slept ${dTotalSleep}ms"
     }
 
 	callback(dTotalSleep)
@@ -492,8 +487,6 @@ def callApiPut(apipath, headers = [], queryParams = [], callback = {})
     }
     catch (Error e)
     {
-    	state.LastRequestErrored = true
-        
      	sendEvent(name: "doorStatus", value: "unknown")
     }
     finally
@@ -549,8 +542,6 @@ def callApiGet(apipath, headers = [], queryParams = [], callback = {})
     }
     catch (Error e)
     {
-    	state.LastRequestErrored = true
-        
      	sendEvent(name: "doorStatus", value: "unknown", isStateChange: true, display: true)
     }
     finally
