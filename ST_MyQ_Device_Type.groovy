@@ -46,6 +46,7 @@ preferences
     input("username", "text", title: "Username", description: "MyQ username (email address)")
     input("password", "password", title: "Password", description: "MyQ password")
     input("door_name", "text", title: "Door Name", description: "MyQ Garage Door name")
+    input("door_id_override", "text", title: "Door ID", description: "MyQ Garage Door Device ID (overrides door name)")
     
 }
 
@@ -58,6 +59,7 @@ metadata
         capability "Refresh"
         
         attribute "doorStatus", "string"
+        attribute "vacationStatus", "string"
         
         command "open"
         command "close"
@@ -177,7 +179,7 @@ def refresh()
 	log.debug "Refreshing Door State"
     
 
-	checkLogin()
+	login()
     
     getDoorStatus() { status ->
     
@@ -222,8 +224,9 @@ def open()
     }
     
 	    
-	sendEvent(name: "doorStatus", value: dCurrentStatus)//, isStateChange: true, display: true)
-    
+	log.debug "Final Door Status: $dCurrentStatus"
+
+	sendEvent(name: "doorStatus", value: dCurrentStatus, display: true)   
 }
 
 def close()
@@ -258,7 +261,9 @@ def close()
         }
     }
 
-	sendEvent(name: "doorStatus", value: dCurrentStatus)//, isStateChange: true, display: true)
+	log.debug "Final Door Status: $dCurrentStatus"
+
+	sendEvent(name: "doorStatus", value: dCurrentStatus, display: true)
 }
 
 
@@ -298,7 +303,7 @@ def login()
             BrandID: response.data.BrandName,
             UserID: response.data.UserId,
             SecToken: response.data.SecurityToken,
-            Expiration: (new Date()).getTime() + 3600000
+            Expiration: (new Date()).getTime() + 300000
         ]
         
 		log.debug "Sec Token: $state.Login.SecToken"
@@ -309,6 +314,20 @@ def getDevice()
 {
 	log.debug "Getting MyQ Devices"
     
+    
+    // If we set an override Device ID, use that always
+    if (settings.door_id_override != null) {
+    
+    	log.debug "Door ID Override:  $settings.door_id_override"
+        
+        state.DeviceID = settings.door_id_override
+        
+        return
+    }
+    
+    
+    
+    
     def loginQParams = [
 
 		securityToken: state.Login.SecToken
@@ -317,17 +336,33 @@ def getDevice()
 	
     callApiGet("api/userdevicedetails/get", [], loginQParams) { response ->
         
-        def garageDevices = response.getData().Devices.findAll{ it.MyQDeviceTypeId == 2 }
-
+        
+        def garageDevices = response.getData().Devices.findAll{ it.TypeId == 47 }
+		def allDevices = response.getData().Devices
+        
+        
+        // Find all devices on MyQ Account
+        allDevices.each { pDevice ->
+        
+        	def dDeviceName = pDevice.Attributes.find{ it.Name == "desc" }.Value
+            def dTypeID = pDevice.TypeId
+            def dDeviceID = pDevice.DeviceId            
+        
+        	log.debug "Device Discovered:  Type ID: $dTypeID, Device Name: $dDeviceName, Device ID: $dDeviceID"        
+        }
+        
 
 		if (garageDevices.isEmpty() == true) {
 
-			log.debug "Door ID:  No Door Found!"
+			log.debug "Device Discovery found no supported door devices"
 	
             sendEvent(name: "doorStatus", value: "door_not_found", isStateChange: true, display: true)
             return
         }
 
+		
+        state.DeviceID = 0
+        
 
 		garageDevices.each{ pDevice ->
         
@@ -337,16 +372,15 @@ def getDevice()
             
             	log.debug "Door ID: $pDevice.DeviceId"
                 
-				state.DeviceID = pDevice.DeviceId                         
-            }
-            else {
-                log.debug "Door ID:  No Door Found!"
-
-                sendEvent(name: "doorStatus", value: "door_not_found", isStateChange: true, display: true)
-                return
+				state.DeviceID = pDevice.DeviceId
             }
         }
         
+        
+        if (state.DeviceID == 0) {
+        
+        	log.debug "Supported door devices were found but none matched name '$settings.door_name'"
+        }
 		
     }
     
