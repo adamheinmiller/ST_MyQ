@@ -357,9 +357,9 @@ def getDevice()
         // Find all devices on MyQ Account
         allDevices.each { pDevice ->
         
-        	def dDeviceName = pDevice.Attributes.find{ it.Name == "desc" }.Value
-            def dTypeID = pDevice.TypeId
-            def dDeviceID = pDevice.DeviceId            
+        	def dDeviceName = pDevice.Attributes.find{ it.Name == "desc" }?.Value
+            def dTypeID = pDevice?.TypeId
+            def dDeviceID = pDevice?.DeviceId            
         
         	log.debug "Device Discovered:  Type ID: $dTypeID, Device Name: $dDeviceName, Device ID: $dDeviceID"        
         }
