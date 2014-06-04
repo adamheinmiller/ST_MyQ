@@ -57,6 +57,7 @@ metadata
 		capability "Polling"
         capability "Switch"
         capability "Refresh"
+        capability "Contact Sensor"
         
         attribute "doorStatus", "string"
         attribute "vacationStatus", "string"
@@ -90,11 +91,18 @@ metadata
             state "opening", label: 'Opening', icon:"st.doors.garage.garage-opening", backgroundColor: "#ffdd00"
         }
 
-
         standardTile("sRefresh", "device.switch", inactiveLabel: false, decoration: "flat") 
         {
 			state "default", label:'', action:"refresh.refresh", icon:"st.secondary.refresh"
 		}
+        
+        standardTile("sContact", "device.contact")
+        {
+			state "open", label: '${name}', icon: "st.contact.contact.open", backgroundColor: "#ffa81e"
+			state "closed", label: '${name}', icon: "st.contact.contact.closed", backgroundColor: "#79b821"
+        }
+        
+        
 
 		standardTile("sLogin", "device.switch", inactiveLabel: false, decoration: "flat") 
         {
@@ -122,7 +130,7 @@ metadata
 		}
 
 		
-        def debugDetailTiles = [] // + ["sLogin", "sGetDeviceInfo", "sGetDoorStatus", "sOpenDoor", "sCloseDoor"]
+        def debugDetailTiles = [] // + ["sContact", "sLogin", "sGetDeviceInfo", "sGetDoorStatus", "sOpenDoor", "sCloseDoor"]
         		
         main(["sDoorToggle"])
         details(["sDoorToggle", "sRefresh"] + debugDetailTiles)
@@ -158,7 +166,7 @@ def updated() {
 // handle commands
 def poll() 
 {
-	log.debug "Polling"
+	log.debug "MyQ Garage door Polling"
     
     refresh()
 }
@@ -182,14 +190,12 @@ def refresh()
 	login()
     
     getDoorStatus() { status ->
-    
-
-    	def dDoorStatus = translateDoorStatus(status)
+            
+    	setDoorState(status, true)
         
-    	//sendEvent(name: "doorStatus", value: dDoorStatus, isStateChange: true, display: true)
-    	sendEvent(name: "doorStatus", value: dDoorStatus)
-    
-    	log.debug "Door Status: $dDoorStatus"
+        setContactSensorState(status, true)      
+        
+    	log.debug "Door Status: $status"
     }
 }
 
@@ -204,29 +210,32 @@ def open()
     def dInitStatus
     def dCurrentStatus = "opening"
     
-    getDoorStatus() { dInitStatus = translateDoorStatus(it) }
+    getDoorStatus() { status -> dInitStatus = status }
                    
 	if (dInitStatus == "opening" || dInitStatus == "open") { return }
 
 
-	sendEvent(name: "doorStatus", value: "opening", display: true) //, isStateChange: true, display: true)
-
+	setDoorState("opening", true)
     
     openDoor()
+
+
+	// Contact Sensor
+	setContactSensorState("open", true)      
 
 
 	while (dCurrentStatus == "opening")
     {
 		sleepForDuration(4500) {
         
-        	getDoorStatus() { dCurrentStatus = translateDoorStatus(it) }
+        	getDoorStatus() { status -> dCurrentStatus = status }
         }
     }
     
 	    
 	log.debug "Final Door Status: $dCurrentStatus"
 
-	sendEvent(name: "doorStatus", value: dCurrentStatus, display: true)   
+	setDoorState(dCurrentStatus, true)
 }
 
 def close()
@@ -240,30 +249,34 @@ def close()
 	def dInitStatus
     def dCurrentStatus = "closing"
     
-    getDoorStatus() { dInitStatus = translateDoorStatus(it) }
+    getDoorStatus() { status -> dInitStatus = status }
                    
 	if (dInitStatus == "closing" || dInitStatus == "closed") { return }
 
 
-	sendEvent(name: "doorStatus", value: "closing", display: true)//, isStateChange: true, display: true)
+	setDoorState("closing", true)
 
 
     closeDoor()
     
     
-    sleepForDuration(5000)
+	// Contact Sensor
+	setContactSensorState("closed", true)
+
+
+	sleepForDuration(5000)
     
 	while (dCurrentStatus == "closing")
     {
 		sleepForDuration(4500) {
         
-        	getDoorStatus() { dCurrentStatus = translateDoorStatus(it) }
+        	getDoorStatus() { status -> dCurrentStatus = status }
         }
     }
 
 	log.debug "Final Door Status: $dCurrentStatus"
 
-	sendEvent(name: "doorStatus", value: dCurrentStatus, display: true)
+	setDoorState(dCurrentStatus, true)
 }
 
 
@@ -356,8 +369,9 @@ def getDevice()
 
 			log.debug "Device Discovery found no supported door devices"
 	
-            sendEvent(name: "doorStatus", value: "door_not_found", isStateChange: true, display: true)
-            return
+    		setDoorState("door_not_found", true)
+
+			return
         }
 
 		
@@ -399,12 +413,10 @@ def getDoorStatus(callback)
 
 
 	callApiGet("api/deviceattribute/getdeviceattribute", [], loginQParams) { response ->
-    
-    
-    	def doorState = response.data.AttributeValue
         
-        callback(doorState)
-        
+    	def doorState = translateDoorStatus( response.data.AttributeValue )
+                
+        callback(doorState)        
     }
 }
 
@@ -439,6 +451,27 @@ def closeDoor()
         // if error, do something?
 	}
 }
+
+
+def setContactSensorState(status, isStateChange)
+{
+    // Sync contact sensor
+    if (status == "open" || status == "opening" || status == "stopped") {
+
+		sendEvent(name: "contact", value: "open", display: true)
+    }
+	else if (status == "closed" || status == "closing") {
+    
+    	sendEvent(name: "contact", value: "closed", display: true)
+    }
+}
+
+
+def setDoorState(status, isStateChange)
+{
+	sendEvent(name: "doorStatus", value: status, display: true)
+}
+
 
 def translateDoorStatus(status)
 {
@@ -521,7 +554,7 @@ def callApiPut(apipath, headers = [], queryParams = [], callback = {})
     }
     catch (Error e)
     {
-     	sendEvent(name: "doorStatus", value: "unknown")
+		setDoorState("unknown", true)
     }
     finally
     {
@@ -576,7 +609,7 @@ def callApiGet(apipath, headers = [], queryParams = [], callback = {})
     }
     catch (Error e)
     {
-     	sendEvent(name: "doorStatus", value: "unknown", isStateChange: true, display: true)
+		setDoorState("unknown", true)
     }
     finally
     {
