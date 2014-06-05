@@ -61,6 +61,7 @@ metadata
         
         attribute "doorStatus", "string"
         attribute "vacationStatus", "string"
+        attribute "lastDoorAction", "string"
         
         command "open"
         command "close"
@@ -91,7 +92,7 @@ metadata
             state "opening", label: 'Opening', icon:"st.doors.garage.garage-opening", backgroundColor: "#ffdd00"
         }
 
-        standardTile("sRefresh", "device.switch", inactiveLabel: false, decoration: "flat") 
+        standardTile("sRefresh", "device.doorStatus", inactiveLabel: false, decoration: "flat") 
         {
 			state "default", label:'', action:"refresh.refresh", icon:"st.secondary.refresh"
 		}
@@ -102,6 +103,11 @@ metadata
 			state "closed", label: '${name}', icon: "st.contact.contact.closed", backgroundColor: "#79b821"
         }
         
+        valueTile("vLastDoorAction", "device.lastDoorAction", width: 2, height: 1, decoration: "flat")
+        {
+        	//state "default", label: '${(currentValue - new Date().getTime()) / 60000}h 50m 22s', unit: "F"
+        	state "default", label: '${currentValue}'
+        }
         
 
 		standardTile("sLogin", "device.switch", inactiveLabel: false, decoration: "flat") 
@@ -133,7 +139,7 @@ metadata
         def debugDetailTiles = [] // + ["sContact", "sLogin", "sGetDeviceInfo", "sGetDoorStatus", "sOpenDoor", "sCloseDoor"]
         		
         main(["sDoorToggle"])
-        details(["sDoorToggle", "sRefresh"] + debugDetailTiles)
+        details(["sDoorToggle", "vLastDoorAction", "sRefresh"] + debugDetailTiles)
     }
 
 }
@@ -185,7 +191,7 @@ def off()
 def refresh()
 {
 	log.debug "Refreshing Door State"
-    
+        
 
 	login()
     
@@ -350,14 +356,14 @@ def getDevice()
     callApiGet("api/userdevicedetails/get", [], loginQParams) { response ->
         
         
-        def garageDevices = response.getData().Devices.findAll{ it.TypeId == 47 }
+        def garageDevices = response.getData().Devices.findAll{ it.TypeId == 47 || it.TypeID == 259 }
 		def allDevices = response.getData().Devices
         
         
         // Find all devices on MyQ Account
         allDevices.each { pDevice ->
         
-        	def dDeviceName = pDevice.Attributes.find{ it.Name == "desc" }?.Value
+        	def dDeviceName = pDevice.Attributes.find{ it.Name == "desc" }?.Value ?: "Home"
             def dTypeID = pDevice?.TypeId
             def dDeviceID = pDevice?.DeviceId            
         
@@ -415,9 +421,46 @@ def getDoorStatus(callback)
 	callApiGet("api/deviceattribute/getdeviceattribute", [], loginQParams) { response ->
         
     	def doorState = translateDoorStatus( response.data.AttributeValue )
+		
+		calcLastActivityTime( response.data.UpdatedTime.toLong() )
+
                 
         callback(doorState)        
     }
+}
+
+
+def calcLastActivityTime(lastActivity)
+{
+	def currentTime = new Date().getTime()
+	def diffTotal = currentTime - lastActivity
+                
+	def lastActLabel = ""
+        
+	//diffTotal = (86400000 * 12) + (3600000 * 2) + (60000 * 1)
+        
+	def diffDays = (diffTotal / 86400000) as long
+	def diffHours = (diffTotal % 86400000 / 3600000) as long
+    def diffMinutes = (diffTotal % 86400000 % 3600000 / 60000) as long
+    def diffSeconds = (diffTotal % 86400000 % 3600000 % 60000 / 1000) as long
+        
+        
+	if (diffDays == 1) lastActLabel += "${diffDays} Day"
+	else if (diffDays > 1) lastActLabel += "${diffDays} Days"
+        
+	if (diffDays > 0 && diffHours > 0) lastActLabel += ", "
+        
+	if (diffHours == 1) lastActLabel += "${diffHours} Hour"
+	else if (diffHours > 1) lastActLabel += "${diffHours} Hours"
+
+	if (diffDays == 0 && diffHours > 0 && diffMinutes > 0) lastActLabel += ", "
+
+	if (diffDays == 0 && diffMinutes == 1) lastActLabel += "${diffMinutes} Minute"
+	if (diffDays == 0 && diffMinutes > 1) lastActLabel += "${diffMinutes} Minutes"
+
+	if (diffTotal < 60000) lastActLabel = "${diffSeconds} Seconds"
+
+    sendEvent(name: "lastDoorAction", value: lastActLabel)
 }
 
 
