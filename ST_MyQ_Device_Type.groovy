@@ -502,10 +502,12 @@ def setContactSensorState(status, isStateChange)
     if (status == "open" || status == "opening" || status == "stopped") {
 
 		sendEvent(name: "contact", value: "open", display: true)
+        sendEvent(name: "switch", value: "on", display: true)
     }
 	else if (status == "closed" || status == "closing") {
     
     	sendEvent(name: "contact", value: "closed", display: true)
+        sendEvent(name: "switch", value: "off", display: true)
     }
 }
 
