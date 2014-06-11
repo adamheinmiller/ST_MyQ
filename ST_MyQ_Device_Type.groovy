@@ -45,9 +45,7 @@ preferences
 {
     input("username", "text", title: "Username", description: "MyQ username (email address)")
     input("password", "password", title: "Password", description: "MyQ password")
-    input("door_name", "text", title: "Door Name", description: "MyQ Garage Door name")
-    input("door_id_override", "text", title: "Door ID", description: "MyQ Garage Door Device ID (overrides door name)")
-    
+    input("door_name", "text", title: "Door Name", description: "MyQ Garage Door name or Device ID")
 }
 
 metadata 
@@ -105,7 +103,6 @@ metadata
         
         valueTile("vLastDoorAction", "device.lastDoorAction", width: 2, height: 1, decoration: "flat")
         {
-        	//state "default", label: '${(currentValue - new Date().getTime()) / 60000}h 50m 22s', unit: "F"
         	state "default", label: '${currentValue}'
         }
         
@@ -221,18 +218,18 @@ def open()
 	if (dInitStatus == "opening" || dInitStatus == "open") { return }
 
 
-	setDoorState("opening", true)
+	setDoorState("opening")
     
     openDoor()
 
 
 	// Contact Sensor
-	setContactSensorState("open", true)      
+	setContactSensorState("open")      
 
 
 	while (dCurrentStatus == "opening")
     {
-		sleepForDuration(4500) {
+		sleepForDuration(1000) {
         
         	getDoorStatus() { status -> dCurrentStatus = status }
         }
@@ -254,30 +251,40 @@ def close()
         
 	def dInitStatus
     def dCurrentStatus = "closing"
+    def dTotalSleep = 0
     
     getDoorStatus() { status -> dInitStatus = status }
                    
 	if (dInitStatus == "closing" || dInitStatus == "closed") { return }
 
 
-	setDoorState("closing", true)
+	setDoorState("closing")
 
 
     closeDoor()
     
     
 	// Contact Sensor
-	setContactSensorState("closed", true)
+	setContactSensorState("closed")
 
 
-	sleepForDuration(5000)
+	sleepForDuration(7500) { dTotalSleep += it }
     
-	while (dCurrentStatus == "closing")
+	while (dCurrentStatus == "closing" && dTotalSleep <= 15000)
     {
-		sleepForDuration(4500) {
-        
+		sleepForDuration(1000) {
+        	
+            dTotalSleep += it
+        	
         	getDoorStatus() { status -> dCurrentStatus = status }
         }
+    }
+    
+    if (dTotalSleep >= 15000) {
+    
+    	log.debug "Exceeded Door Close time: $dTotalSleep"
+        
+    	dCurrentStatus = "closed"
     }
 
 	log.debug "Final Door Status: $dCurrentStatus"
@@ -334,17 +341,16 @@ def getDevice()
 	log.debug "Getting MyQ Devices"
     
     
-    // If we set an override Device ID, use that always
-    if (settings.door_id_override != null) {
+    // If we set a door name that looks like a device id, use it as a device id
+    if ((settings.door_name ?: "blank").isLong() == true) {
     
-    	log.debug "Door ID Override:  $settings.door_id_override"
+    	log.debug "Door Name:  Assuming Door Name is a Device ID, $settings.door_name"
         
-        state.DeviceID = settings.door_id_override
+        state.DeviceID = settings.door_name
         
         return
     }
-    
-    
+       
     
     
     def loginQParams = [
@@ -375,7 +381,7 @@ def getDevice()
 
 			log.debug "Device Discovery found no supported door devices"
 	
-    		setDoorState("door_not_found", true)
+    		setDoorState("door_not_found")
 
 			return
         }
@@ -496,7 +502,7 @@ def closeDoor()
 }
 
 
-def setContactSensorState(status, isStateChange)
+def setContactSensorState(status, isStateChange = false)
 {
     // Sync contact sensor
     if (status == "open" || status == "opening" || status == "stopped") {
@@ -512,9 +518,17 @@ def setContactSensorState(status, isStateChange)
 }
 
 
-def setDoorState(status, isStateChange)
+def setDoorState(status, isStateChange = false)
 {
-	sendEvent(name: "doorStatus", value: status, display: true)
+	if (isStateChange == true) {
+    	
+        sendEvent(name: "doorStatus", value: status, isStateChange: true, display: true)
+    }
+    else {
+    
+		sendEvent(name: "doorStatus", value: status, display: true)
+    }
+
 }
 
 
@@ -543,9 +557,9 @@ def sleepForDuration(duration, callback = {})
 		try { httpGet("http://australia.gov.au/404") { } } catch (e) { }
         
         dTotalSleep = (new Date().getTime() - dStart)
-        
-        //log.debug "Slept ${dTotalSleep}ms"
     }
+
+    //log.debug "Slept ${dTotalSleep}ms"
 
 	callback(dTotalSleep)
 }
