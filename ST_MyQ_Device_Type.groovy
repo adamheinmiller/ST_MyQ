@@ -541,6 +541,8 @@ def translateDoorStatus(status)
 	else if (status == "4") dReturn = "opening"
 	else if (status == "5") dReturn = "closing"
     else if (status == "3") dReturn = "stopped"
+    
+    if (dReturn == "unknown") { log.debug "Unknown Door Status ID: $status" }
 
 	return dReturn
 }
