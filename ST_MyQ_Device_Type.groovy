@@ -88,7 +88,8 @@ metadata
             state "closing", label: 'Closing', icon:"st.doors.garage.garage-closing", backgroundColor: "#ffdd00"
 			state "open", label: 'Open', icon:"st.doors.garage.garage-open", action: "close", backgroundColor: "#ffdd00"
             state "opening", label: 'Opening', icon:"st.doors.garage.garage-opening", backgroundColor: "#ffdd00"
-        }
+			state "moving", label: 'Moving', icon: "st.motion.motion.active", action: "refresh.refresh", backgroundColor: "#ffdd00"
+		}
 
         standardTile("sRefresh", "device.doorStatus", inactiveLabel: false, decoration: "flat") 
         {
@@ -215,7 +216,7 @@ def open()
     
     getDoorStatus() { status -> dInitStatus = status }
                    
-	if (dInitStatus == "opening" || dInitStatus == "open") { return }
+	if (dInitStatus == "opening" || dInitStatus == "open" || dInitStatus == "moving") { return }
 
 
 	setDoorState("opening")
@@ -231,7 +232,7 @@ def open()
     {
 		sleepForDuration(1000) {
         
-        	getDoorStatus() { status -> dCurrentStatus = status }
+        	getDoorStatus(dInitStatus) { status -> dCurrentStatus = status }
         }
     }
     
@@ -255,7 +256,7 @@ def close()
     
     getDoorStatus() { status -> dInitStatus = status }
                    
-	if (dInitStatus == "closing" || dInitStatus == "closed") { return }
+	if (dInitStatus == "closing" || dInitStatus == "closed" || dInitStatus == "moving") { return }
 
 
 	setDoorState("closing")
@@ -276,7 +277,7 @@ def close()
         	
             dTotalSleep += it
         	
-        	getDoorStatus() { status -> dCurrentStatus = status }
+        	getDoorStatus(dInitStatus) { status -> dCurrentStatus = status }
         }
     }
     
@@ -413,7 +414,7 @@ def getDevice()
 }
 
 
-def getDoorStatus(callback)
+def getDoorStatus(initialStatus = null, callback)
 {
 	
     def loginQParams = [
@@ -426,7 +427,7 @@ def getDoorStatus(callback)
 
 	callApiGet("api/deviceattribute/getdeviceattribute", [], loginQParams) { response ->
         
-    	def doorState = translateDoorStatus( response.data.AttributeValue )
+    	def doorState = translateDoorStatus( response.data.AttributeValue, initialStatus )
 		
 		calcLastActivityTime( response.data.UpdatedTime.toLong() )
 
@@ -532,15 +533,16 @@ def setDoorState(status, isStateChange = false)
 }
 
 
-def translateDoorStatus(status)
+def translateDoorStatus(status, initStatus = null)
 {
 	def dReturn = "unknown"
-              
+    
 	if (status == "2") dReturn = "closed"
-	else if (status == "1") dReturn = "open"
-	else if (status == "4") dReturn = "opening"
-	else if (status == "5") dReturn = "closing"
+	else if (status == "1" || status == "9") dReturn = "open"
+	else if (status == "4" || (status == "8" && initStatus == "closed")) dReturn = "opening"
+	else if (status == "5" || (status == "8" && initStatus == "open")) dReturn = "closing"
     else if (status == "3") dReturn = "stopped"
+    else if (status == "8" && initStatus == null) dReturn = "moving"
     
     if (dReturn == "unknown") { log.debug "Unknown Door Status ID: $status" }
 
