@@ -101,13 +101,13 @@ metadata
 			state "open", label: '${name}', icon: "st.contact.contact.open", backgroundColor: "#ffa81e"
 			state "closed", label: '${name}', icon: "st.contact.contact.closed", backgroundColor: "#79b821"
         }
-        
+
         valueTile("vLastDoorAction", "device.lastDoorAction", width: 2, height: 1, decoration: "flat")
         {
         	state "default", label: '${currentValue}'
         }
         
-
+/*
 		standardTile("sLogin", "device.switch", inactiveLabel: false, decoration: "flat") 
         {
 			state "default", label:'Login', action:"login"
@@ -132,7 +132,7 @@ metadata
         {
 			state "default", label:'CloseDoor', action:"close"
 		}
-
+*/
 		
         def debugDetailTiles = [] // + ["sContact", "sLogin", "sGetDeviceInfo", "sGetDoorStatus", "sOpenDoor", "sCloseDoor"]
         		
@@ -467,7 +467,7 @@ def calcLastActivityTime(lastActivity)
 
 	if (diffTotal < 60000) lastActLabel = "${diffSeconds} Seconds"
 
-    sendEvent(name: "lastDoorAction", value: lastActLabel)
+    sendEvent(name: "lastDoorAction", value: lastActLabel, descriptionText: "Open Time is $lastActLabel")
 }
 
 
@@ -508,13 +508,13 @@ def setContactSensorState(status, isStateChange = false)
     // Sync contact sensor
     if (status == "open" || status == "opening" || status == "stopped") {
 
-		sendEvent(name: "contact", value: "open", display: true)
-        sendEvent(name: "switch", value: "on", display: true)
+		sendEvent(name: "contact", value: "open", display: true, descriptionText: "Contact is open")
+        sendEvent(name: "switch", value: "on", display: true, descriptionText: "Switch is on")
     }
 	else if (status == "closed" || status == "closing") {
     
-    	sendEvent(name: "contact", value: "closed", display: true)
-        sendEvent(name: "switch", value: "off", display: true)
+    	sendEvent(name: "contact", value: "closed", display: true, descriptionText: "Contact is closed")
+        sendEvent(name: "switch", value: "off", display: true, descriptionText: "Switch is off")
     }
 }
 
@@ -523,11 +523,11 @@ def setDoorState(status, isStateChange = false)
 {
 	if (isStateChange == true) {
     	
-        sendEvent(name: "doorStatus", value: status, isStateChange: true, display: true)
+        sendEvent(name: "doorStatus", value: status, isStateChange: true, display: true, descriptionText: "Door is $status")
     }
     else {
     
-		sendEvent(name: "doorStatus", value: status, display: true)
+		sendEvent(name: "doorStatus", value: status, display: true, descriptionText: "Door is $status")
     }
 
 }
