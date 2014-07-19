@@ -54,6 +54,7 @@ metadata
     {
 		capability "Polling"
         capability "Switch"
+        capability "Momentary"
         capability "Refresh"
         capability "Contact Sensor"
         
@@ -68,6 +69,7 @@ metadata
         command "getDoorStatus"
         command "openDoor"
         command "closeDoor"
+        command "push"
 	}
 
 	simulator 
@@ -146,7 +148,6 @@ metadata
 def parse(String description) 
 {}
 
-
 def installed() {
 
 	log.debug "Installing MyQ Garage Door"
@@ -185,7 +186,6 @@ def off()
 	close()
 }
 
-
 def refresh()
 {
 	log.debug "Refreshing Door State"
@@ -194,13 +194,15 @@ def refresh()
 	login()
     
     getDoorStatus() { status ->
-            
     	setDoorState(status, true)
-        
         setContactSensorState(status, true)      
-        
     	log.debug "Door Status: $status"
     }
+}
+
+def push() { // for momentary switch capability
+	if (device.latestValue("doorStatus") == "open") { close() }
+	if (device.latestValue("ddorStatus") == "closed") { open() }
 }
 
 def open()
@@ -223,15 +225,13 @@ def open()
     
     openDoor()
 
-
 	// Contact Sensor
-	setContactSensorState("open")      
+//	setContactSensorState("open")      
 
 
 	while (dCurrentStatus == "opening")
     {
 		sleepForDuration(1000) {
-        
         	getDoorStatus(dInitStatus) { status -> dCurrentStatus = status }
         }
     }
@@ -240,16 +240,19 @@ def open()
 	log.debug "Final Door Status: $dCurrentStatus"
 
 	setDoorState(dCurrentStatus, true)
+	
+	if (dCurrentStatus == "open") {
+		// Contact Sensor
+		setContactSensorState("open")      
+	}
 }
 
 def close()
 {
 	log.debug "Closing Door"
     
-
 	checkLogin()
     
-        
 	def dInitStatus
     def dCurrentStatus = "closing"
     def dTotalSleep = 0
@@ -261,12 +264,10 @@ def close()
 
 	setDoorState("closing")
 
-
     closeDoor()
     
-    
 	// Contact Sensor
-	setContactSensorState("closed")
+//	setContactSensorState("closed")
 
 
 	sleepForDuration(7500) { dTotalSleep += it }
@@ -274,23 +275,24 @@ def close()
 	while (dCurrentStatus == "closing" && dTotalSleep <= 15000)
     {
 		sleepForDuration(1000) {
-        	
             dTotalSleep += it
-        	
         	getDoorStatus(dInitStatus) { status -> dCurrentStatus = status }
         }
     }
     
     if (dTotalSleep >= 15000) {
-    
     	log.debug "Exceeded Door Close time: $dTotalSleep"
-        
     	dCurrentStatus = "closed"
     }
 
 	log.debug "Final Door Status: $dCurrentStatus"
 
 	setDoorState(dCurrentStatus, true)
+	
+	if (dCurrentStatus == "closed") {
+		// Contact Sensor - wait until it's actually closed before  changing contact sensor state
+		setContactSensorState("closed")
+	}
 }
 
 
