@@ -56,6 +56,7 @@ metadata
         capability "Switch"
         capability "Refresh"
         capability "Contact Sensor"
+		capability "Momentary"
         
         attribute "doorStatus", "string"
         attribute "vacationStatus", "string"
@@ -133,8 +134,14 @@ metadata
 			state "default", label:'CloseDoor', action:"close"
 		}
 */
-		
-        def debugDetailTiles = [] // + ["sContact", "sLogin", "sGetDeviceInfo", "sGetDoorStatus", "sOpenDoor", "sCloseDoor"]
+
+		standardTile("sMomentary", "device.switch", width: 1, height: 1, canChangeIcon: false) 
+        {
+			state "default", label: 'Push', action: "momentary.push", backgroundColor: "#ffffff"
+		}
+        
+        
+        def debugDetailTiles = ["sMomentary"] // + ["sContact", "sLogin", "sGetDeviceInfo", "sGetDoorStatus", "sOpenDoor", "sCloseDoor"]
         		
         main(["sDoorToggle"])
         details(["sDoorToggle", "vLastDoorAction", "sRefresh"] + debugDetailTiles)
@@ -185,6 +192,33 @@ def off()
 	close()
 }
 
+def push()
+{
+	checkLogin()
+
+
+    def dInitStatus
+    getDoorStatus() { status -> dInitStatus = status }
+
+
+	if (dInitStatus == "closed" || dInitStatus == "closing" || dInitStatus == "stopped" || dInitStatus == "moving")
+    {
+    	log.debug "Door is in a closed status, opening"
+        
+		open()
+    }
+    else if (dInitStatus == "open" || dInitStatus == "opening")
+    {
+    	log.debug "Door is in an open status, closing"
+        
+    	close()
+    }
+    else if (dInitStatus == "unknown")
+    {
+    	log.debug "Door is in an unknown state, doing nothing"
+    }
+
+}
 
 def refresh()
 {
