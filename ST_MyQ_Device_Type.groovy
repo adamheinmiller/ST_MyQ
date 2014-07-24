@@ -6,7 +6,7 @@
  *	Recognition:
  *
  *	@SteveGanz - Exceptional testing and feedback
- *	@SANdood - Integration with dashboard "Doors and Locks" section
+ *	@StorageAnarchy - Integration with dashboard "Doors and Locks" section
  *
  *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
