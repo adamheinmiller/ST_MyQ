@@ -3,6 +3,12 @@
  *
  *  Copyright 2014 Adam Heinmiller
  *
+ *	Recognition:
+ *
+ *	@SteveGanz - Exceptional testing and feedback
+ *	@SANdood - Integration with dashboard "Doors and Locks" section
+ *
+ *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  in compliance with the License. You may obtain a copy of the License at:
  *
@@ -133,25 +139,20 @@ metadata
         {
 			state "default", label:'CloseDoor', action:"close"
 		}
-*/
 
 		standardTile("sMomentary", "device.switch", width: 1, height: 1, canChangeIcon: false) 
         {
 			state "default", label: 'Push', action: "momentary.push", backgroundColor: "#ffffff"
 		}
+*/        
         
-        
-        def debugDetailTiles = ["sMomentary"] // + ["sContact", "sLogin", "sGetDeviceInfo", "sGetDoorStatus", "sOpenDoor", "sCloseDoor"]
+        def debugDetailTiles = [] // + ["sMomentary", "sContact", "sLogin", "sGetDeviceInfo", "sGetDoorStatus", "sOpenDoor", "sCloseDoor"]
         		
         main(["sDoorToggle"])
         details(["sDoorToggle", "vLastDoorAction", "sRefresh"] + debugDetailTiles)
     }
 
 }
-
-// parse events into attributes
-def parse(String description) 
-{}
 
 
 def installed() {
@@ -192,6 +193,7 @@ def off()
 	close()
 }
 
+
 def push()
 {
 	checkLogin()
@@ -219,6 +221,7 @@ def push()
     }
 
 }
+
 
 def refresh()
 {
@@ -253,13 +256,10 @@ def open()
 	if (dInitStatus == "opening" || dInitStatus == "open" || dInitStatus == "moving") { return }
 
 
-	setDoorState("opening")
+	setDoorState("opening", true)
     
     openDoor()
 
-
-	// Contact Sensor
-	setContactSensorState("open")      
 
 
 	while (dCurrentStatus == "opening")
@@ -269,7 +269,11 @@ def open()
         	getDoorStatus(dInitStatus) { status -> dCurrentStatus = status }
         }
     }
-    
+
+
+	// Contact Sensor
+	setContactSensorState("open")      
+
 	    
 	log.debug "Final Door Status: $dCurrentStatus"
 
@@ -293,16 +297,12 @@ def close()
 	if (dInitStatus == "closing" || dInitStatus == "closed" || dInitStatus == "moving") { return }
 
 
-	setDoorState("closing")
+	setDoorState("closing", true)
 
 
     closeDoor()
     
     
-	// Contact Sensor
-	setContactSensorState("closed")
-
-
 	sleepForDuration(7500) { dTotalSleep += it }
     
 	while (dCurrentStatus == "closing" && dTotalSleep <= 15000)
@@ -321,6 +321,10 @@ def close()
         
     	dCurrentStatus = "closed"
     }
+
+
+	// Contact Sensor
+	setContactSensorState("closed")
 
 	log.debug "Final Door Status: $dCurrentStatus"
 
