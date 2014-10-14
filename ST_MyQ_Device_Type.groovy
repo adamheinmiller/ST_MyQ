@@ -7,6 +7,8 @@
  *
  *	@SteveGanz - Exceptional testing and feedback
  *	@StorageAnarchy - Integration with dashboard "Doors and Locks" section
+ *	@JimRobertsemail - Craftsman Assurelink compatability settings
+ *
  *
  *
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
@@ -52,6 +54,7 @@ preferences
     input("username", "text", title: "Username", description: "MyQ username (email address)")
     input("password", "password", title: "Password", description: "MyQ password")
     input("door_name", "text", title: "Door Name", description: "MyQ Garage Door name or Device ID")
+    input("is_craftsman", "enum", title: "Is your opener a Craftsman Assurelink?", metadata:[values:["Yes","No"]])
 }
 
 metadata 
@@ -87,8 +90,10 @@ metadata
 
 		standardTile("sDoorToggle", "device.doorStatus", width: 1, height: 1, canChangeIcon: false) 
         {
+			state "default", label:''
+
 			state "unknown", label: 'Unknown', icon: "st.unknown.unknown.unknown", action: "refresh.refresh", backgroundColor: "#afafaf"
-            state "door_not_found", label:'Not Found', backgroundColor: "#CC1821"            
+			state "door_not_found", label:'Not Found', backgroundColor: "#CC1821"            
 
 			state "stopped", label: 'Stopped', icon: "st.contact.contact.open", action: "close", backgroundColor: "#ffdd00"
 			state "closed", label: 'Closed', icon:"st.doors.garage.garage-closed", action: "open", backgroundColor: "#ffffff"
@@ -305,7 +310,7 @@ def close()
     
 	sleepForDuration(7500) { dTotalSleep += it }
     
-	while (dCurrentStatus == "closing" && dTotalSleep <= 15000)
+	while (dCurrentStatus == "closing" && dTotalSleep <= 10000)
     {
 		sleepForDuration(1000) {
         	
@@ -315,7 +320,7 @@ def close()
         }
     }
     
-    if (dTotalSleep >= 15000) {
+    if (dTotalSleep >= 10000) {
     
     	log.debug "Exceeded Door Close time: $dTotalSleep"
         
@@ -591,6 +596,7 @@ def sleepForDuration(duration, callback = {})
 {
 	// I'm sorry!
 
+
 	def dTotalSleep = 0
 	def dStart = new Date().getTime()
     
@@ -607,10 +613,25 @@ def sleepForDuration(duration, callback = {})
 }
 
 
+def getVarParams()
+{
+	def dParams = [
+		BaseURL: "https://myqexternal.myqdevice.com/",
+        AppID: "NWknvuBd7LoFHfXmKNMBcgajXtZEgKUh4V7WNzMidrpUUluDpVYVZx+xT4PCM5Kx"
+	]
+    
+    if ((settings.is_craftsman ?: "No") == "Yes") 
+    {
+		dParams.BaseURL = "https://craftexternal.myqdevice.com/"
+        dParams.AppID = "eU97d99kMG4t3STJZO/Mu2wt69yTQwM0WXZA5oZ74/ascQ2xQrLD/yjeVhEQccBZ"
+    }
+
+	return dParams
+}
+
+
 def callApiPut(apipath, headers = [], queryParams = [], callback = {})
 {
-	def baseURL = "https://myqexternal.myqdevice.com/"
-    
 	def finalHeaders = [
     
     	"User-Agent": "${state.Login.BrandID}/1332 (iPhone; iOS 7.1.1; Scale/2.00)"
@@ -620,7 +641,7 @@ def callApiPut(apipath, headers = [], queryParams = [], callback = {})
 
     def finalQParams = [
     
-    	ApplicationId: "NWknvuBd7LoFHfXmKNMBcgajXtZEgKUh4V7WNzMidrpUUluDpVYVZx+xT4PCM5Kx",
+    	ApplicationId: getVarParams().AppID,
         DeviceId: state.DeviceID,
     	securityToken: state.Login.SecToken
         
@@ -629,7 +650,7 @@ def callApiPut(apipath, headers = [], queryParams = [], callback = {})
     
     def finalParams = [ 
     
-    	uri: baseURL, 
+    	uri: getVarParams().BaseURL, 
         path: apipath, 
         headers: finalHeaders,
         contentType: "application/json; charset=utf-8",
@@ -655,8 +676,10 @@ def callApiPut(apipath, headers = [], queryParams = [], callback = {})
     }
     catch (Error e)
     {
-		setDoorState("unknown", true)
-    }
+		// setDoorState("unknown", true)
+
+		log.debug "API Error: $e"
+	}
     finally
     {
     }
@@ -666,10 +689,8 @@ def callApiPut(apipath, headers = [], queryParams = [], callback = {})
 
 def callApiGet(apipath, headers = [], queryParams = [], callback = {})
 {
-	def baseURL = "https://myqexternal.myqdevice.com/"
-    
-    
-    def finalHeaders = [
+
+	def finalHeaders = [
     
     	"User-Agent": "${state.Login.BrandID}/1332 (iPhone; iOS 7.1.1; Scale/2.00)"
             
@@ -678,7 +699,7 @@ def callApiGet(apipath, headers = [], queryParams = [], callback = {})
     
     def finalQParams = [
     
-    	appId: "NWknvuBd7LoFHfXmKNMBcgajXtZEgKUh4V7WNzMidrpUUluDpVYVZx+xT4PCM5Kx",
+    	appId: getVarParams().AppID,
         filterOn: "true"
     
     ] + queryParams
@@ -686,14 +707,14 @@ def callApiGet(apipath, headers = [], queryParams = [], callback = {})
     
     def finalParams = [ 
     
-    	uri: baseURL, 
+    	uri: getVarParams().BaseURL, 
         path: apipath, 
         headers: finalHeaders,
         query: finalQParams
 	]
     
     
-    //log.debug finalParams
+	//log.debug finalParams
     
     
     try
@@ -710,7 +731,9 @@ def callApiGet(apipath, headers = [], queryParams = [], callback = {})
     }
     catch (Error e)
     {
-		setDoorState("unknown", true)
+		// setDoorState("unknown", true)
+
+		log.debug "API Error: $e"
     }
     finally
     {
